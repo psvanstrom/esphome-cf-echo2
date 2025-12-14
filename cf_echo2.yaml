@@ -41,7 +41,7 @@ external_components:
 
 sensor:
   - platform: cf_echo2
-    update_interval: 30s
+    update_interval: 30min
     energy:
       name: "CF Echo Energy"
       unit_of_measurement: "kWh"
