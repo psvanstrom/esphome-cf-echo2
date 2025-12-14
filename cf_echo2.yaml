@@ -17,6 +17,7 @@ captive_portal:
 
 # Enable logging
 logger:
+  baud_rate: 0  # disable UART logging; use OTA/API logs to avoid collision with meter UART
 
 # Enable Home Assistant API
 api:
