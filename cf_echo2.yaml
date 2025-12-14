@@ -7,6 +7,7 @@ esp8266:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  min_auth_mode: WPA2
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
@@ -17,7 +18,7 @@ captive_portal:
 
 # Enable logging
 logger:
-  baud_rate: 0  # disable UART logging; use OTA/API logs to avoid collision with meter UART
+  baud_rate: 0
 
 # Enable Home Assistant API
 api:

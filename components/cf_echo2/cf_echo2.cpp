@@ -65,7 +65,7 @@ void CFEcho2Reader::send_wakeup() {
   this->parent_->set_data_bits(8);
   this->parent_->set_stop_bits(1);
   this->parent_->load_settings(false);
-  delay(100);
+  delay(10);  // minimal settle time to avoid missing early bytes
 }
 
 bool CFEcho2Reader::read_frame() {

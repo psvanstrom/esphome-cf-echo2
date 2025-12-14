@@ -38,8 +38,8 @@ class CFEcho2Reader : public PollingComponent, public uart::UARTDevice {
   void decode_mbus_payload(uint8_t *buf, size_t total);
 
   const uint16_t WAKEUP_BYTES = 528;
-  const uint32_t WAKEUP_PAUSE_MS = 350;
-  const uint32_t FRAME_TIMEOUT_MS = 3000;
+  const uint32_t WAKEUP_PAUSE_MS = 350;   // short pause after wakeup burst
+  const uint32_t FRAME_TIMEOUT_MS = 5000; // generous read timeout
   static const uint8_t REQ_FRAME[5];
 };
 
