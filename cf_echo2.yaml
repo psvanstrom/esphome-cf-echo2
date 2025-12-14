@@ -1,7 +1,5 @@
 esphome:
   name: cf-echo2-reader
-  platformio_options:
-    platform: file:///Users/par/projects/esphome-cf-echo2/.esphome/pio_home/platforms/espressif8266@3.2.0
 
 esp8266:
   board: d1_mini
@@ -23,7 +21,7 @@ logger:
 # Enable Home Assistant API
 api:
   encryption:
-    key: "fECNmEElePsFm+0x9NBJUoCkeUDQxMU3nkYR9lomx98="
+    key: !secret encryption_key
 
 ota:
   platform: esphome
@@ -38,9 +36,7 @@ uart:
   stop_bits: 1
 
 external_components:
-  - source:
-      type: local
-      path: components
+  - source: github://psvanstrom/esphome-cf-echo2@main
     components: [cf_echo2]
 
 sensor:
