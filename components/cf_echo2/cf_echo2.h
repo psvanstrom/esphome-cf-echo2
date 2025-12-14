@@ -34,6 +34,7 @@ class CFEcho2Reader : public PollingComponent, public uart::UARTDevice {
   sensor::Sensor *delta_t_sensor_{nullptr};
 
   void send_wakeup();
+  void send_request();
   bool read_frame();
   void decode_mbus_payload(uint8_t *buf, size_t total);
 

@@ -31,6 +31,7 @@ void CFEcho2Reader::update() {
   digitalWrite(LED_BUILTIN, LOW);   // LED on (active low)
   
   send_wakeup();
+  send_request();
   bool success = read_frame();
   
   digitalWrite(LED_BUILTIN, HIGH);  // LED off
@@ -66,6 +67,12 @@ void CFEcho2Reader::send_wakeup() {
   this->parent_->set_stop_bits(1);
   this->parent_->load_settings(false);
   delay(10);  // minimal settle time to avoid missing early bytes
+}
+
+void CFEcho2Reader::send_request() {
+  ESP_LOGV(TAG, "Sending M-Bus REQ frame");
+  this->write_array(REQ_FRAME, sizeof(REQ_FRAME));
+  this->flush();
 }
 
 bool CFEcho2Reader::read_frame() {
