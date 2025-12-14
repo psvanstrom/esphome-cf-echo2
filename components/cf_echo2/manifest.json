@@ -1,0 +1,7 @@
+{
+  "domain": "cf_echo2",
+  "name": "CF Echo II Heat Meter",
+  "version": "0.1.0",
+  "dependencies": ["uart"],
+  "codeowners": ["@psvanstrom"]
+}

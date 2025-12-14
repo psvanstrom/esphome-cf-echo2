@@ -1,6 +1,9 @@
 esphome:
   name: cf-echo2-reader
-  platform: ESP8266
+  platformio_options:
+    platform: file:///Users/par/projects/esphome-cf-echo2/.esphome/pio_home/platforms/espressif8266@3.2.0
+
+esp8266:
   board: d1_mini
 
 wifi:
@@ -23,6 +26,7 @@ api:
     key: "fECNmEElePsFm+0x9NBJUoCkeUDQxMU3nkYR9lomx98="
 
 ota:
+  platform: esphome
   password: !secret ota_password
 
 uart:
@@ -34,14 +38,14 @@ uart:
   stop_bits: 1
 
 external_components:
-  - source: github://psvanstrom/esphome-cf-echo2@main
+  - source:
+      type: local
+      path: components
     components: [cf_echo2]
-
-cf_echo2:
-  update_interval: 30s
 
 sensor:
   - platform: cf_echo2
+    update_interval: 30s
     energy:
       name: "CF Echo Energy"
       unit_of_measurement: "kWh"
@@ -51,6 +55,9 @@ sensor:
     power:
       name: "CF Echo Power"
       unit_of_measurement: "W"
+    volume_flow:
+      name: "CF Echo Volume Flow"
+      unit_of_measurement: "m³/h"
     flow_temp:
       name: "CF Echo Flow Temp"
       unit_of_measurement: "°C"

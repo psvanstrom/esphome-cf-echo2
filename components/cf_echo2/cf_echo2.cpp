@@ -1,25 +1,24 @@
 #include "cf_echo2.h"
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
-#include <MBusinoLib.h>     // M-Bus payload decoder [web:123]
-#include <ArduinoJson.h>    // JSON array for decoded fields [web:124]
 
 namespace esphome {
 namespace cf_echo2 {
 
 static const char *const TAG = "cf_echo2.reader";
-
-// M-Bus payload decoder instance
-MBusinoLib mbdecoder(254);  // Max payload size 254 bytes [web:123]
+const uint8_t CFEcho2Reader::REQ_FRAME[5] = {0x10, 0x5B, 0xFE, 0x59, 0x16};
 
 void CFEcho2Reader::setup() {
   ESP_LOGCONFIG(TAG, "Setting up CF Echo II reader...");
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);  // LED off initially
-  
+
   // Configure UART for 2400 8E1 (M-Bus default)
-  this->set_uart_baud_rate(2400);
-  this->set_uart_config(UART_CONFIG_PARITY_EVEN, UART_CONFIG_DATA_BITS_8, UART_CONFIG_STOP_BITS_1);
+  this->parent_->set_baud_rate(2400);
+  this->parent_->set_parity(uart::UART_CONFIG_PARITY_EVEN);
+  this->parent_->set_data_bits(8);
+  this->parent_->set_stop_bits(1);
+  this->parent_->load_settings(false);
 }
 
 void CFEcho2Reader::loop() {
@@ -43,23 +42,29 @@ void CFEcho2Reader::update() {
 
 void CFEcho2Reader::send_wakeup() {
   ESP_LOGV(TAG, "Wake-up: switching to 8N1");
-  this->uart()->flush();
-  
+  this->flush();
+
   // Switch to 8N1 for wakeup sequence
-  this->set_uart_config(UART_CONFIG_PARITY_NONE, UART_CONFIG_DATA_BITS_8, UART_CONFIG_STOP_BITS_1);
+  this->parent_->set_parity(uart::UART_CONFIG_PARITY_NONE);
+  this->parent_->set_data_bits(8);
+  this->parent_->set_stop_bits(1);
+  this->parent_->load_settings(false);
   delay(50);
   
   ESP_LOGV(TAG, "Sending %u wakeup bytes (8N1)...", WAKEUP_BYTES);
-  for (uint8_t i = 0; i < WAKEUP_BYTES; i++) {
+  for (uint16_t i = 0; i < WAKEUP_BYTES; i++) {
     this->write_byte(0x55);
     if (i % 32 == 0) yield();  // Feed WDT
   }
-  this->uart()->flush();
+  this->flush();
   delay(WAKEUP_PAUSE_MS);
   
   // Switch back to 8E1 for M-Bus communication
   ESP_LOGV(TAG, "Switching to 8E1 for M-Bus");
-  this->set_uart_config(UART_CONFIG_PARITY_EVEN, UART_CONFIG_DATA_BITS_8, UART_CONFIG_STOP_BITS_1);
+  this->parent_->set_parity(uart::UART_CONFIG_PARITY_EVEN);
+  this->parent_->set_data_bits(8);
+  this->parent_->set_stop_bits(1);
+  this->parent_->load_settings(false);
   delay(100);
 }
 
@@ -166,46 +171,124 @@ bool CFEcho2Reader::read_frame() {
 
 void CFEcho2Reader::decode_mbus_payload(uint8_t *payload, size_t len) {
   ESP_LOGI(TAG, "Decoding M-Bus payload (%u bytes)", len);
-  
-  // Hex dump of raw payload for debugging
-  ESP_LOGI(TAG, "Raw payload:");
-  for (size_t i = 0; i < len; i++) {
-    if (i % 16 == 0) ESP_LOGI(TAG, "");
-    ESP_LOGI(TAG, "%02X ", payload[i]);
-  }
-  ESP_LOGI(TAG, "");
-  
-  // Decode with MBusinoLib
-  DynamicJsonDocument doc(4096);  // Large enough for all records
-  JsonArray root = doc.to<JsonArray>();
-  
-  uint8_t fields = mbdecoder.decode(payload, (uint8_t)len, root);
-  
-  if (fields == 0) {
-    uint8_t err = mbdecoder.getError();
-    ESP_LOGW(TAG, "MBusinoLib decode failed, error code: %u", err);
+
+  auto to_bcd = [](const uint8_t *data, size_t l, uint64_t &out) -> bool {
+    uint64_t val = 0;
+    uint64_t mult = 1;
+    for (size_t i = 0; i < l; i++) {
+      uint8_t lo = data[i] & 0x0F;
+      uint8_t hi = (data[i] >> 4) & 0x0F;
+      if (lo > 9 || hi > 9) return false;
+      val += lo * mult;
+      mult *= 10;
+      val += hi * mult;
+      mult *= 10;
+    }
+    out = val;
+    return true;
+  };
+
+  if (len < 12) {
+    ESP_LOGW(TAG, "Payload too short");
     return;
   }
-  
-  ESP_LOGI(TAG, "Successfully decoded %u fields:", fields);
-  
-  // Process each decoded field
-  for (uint8_t i = 0; i < fields; i++) {
-    JsonObject field = root[i];
-    
-    const char* name = field["name"] | "<unknown>";
-    const char* units = field["units"] | "";
-    double value = field["value_scaled"] | 0.0;
-    const char* value_str = field["value_string"] | "";
-    
-    ESP_LOGI(TAG, "  Field %u: %s = %.6f %s (%s)", 
-             i, name, value, units, value_str);
-    
-    // TODO: Update sensor values based on field names/units
-    // Example:
-    // if (strcmp(name, "heat_energy_total") == 0 && strcmp(units, "kWh") == 0) {
-    //   if (energy_sensor_) energy_sensor_->publish_state(value);
-    // }
+  size_t idx = 12;  // skip fixed application header seen on this meter
+  auto remaining = [&](size_t need) { return idx + need <= len; };
+
+  auto read_le = [](const uint8_t *d, size_t l) -> uint64_t {
+    uint64_t v = 0;
+    for (size_t i = 0; i < l; i++) v |= (uint64_t)d[i] << (8 * i);
+    return v;
+  };
+
+  auto publish = [&](const char *label, sensor::Sensor *s, float value) {
+    if (s != nullptr) {
+      ESP_LOGD(TAG, "%s = %.3f", label, value);
+      s->publish_state(value);
+    }
+  };
+
+  while (idx + 2 <= len) {  // need at least DIF+VIF
+    uint8_t dif = payload[idx++];
+    if (dif == 0x2F) continue;  // filler
+    uint8_t len_code = dif & 0x0F;
+    size_t l = 0;
+    switch (len_code) {
+      case 0x00: l = 0; break;
+      case 0x01:
+      case 0x09: l = 1; break;
+      case 0x02:
+      case 0x0A: l = 2; break;
+      case 0x03:
+      case 0x0B: l = 3; break;
+      case 0x04:
+      case 0x0C: l = 4; break;
+      case 0x06:
+      case 0x0E: l = 6; break;
+      case 0x07:
+      case 0x0F: l = 8; break;
+      case 0x05: l = 4; break;
+      default:
+        ESP_LOGW(TAG, "Unknown len code %02X", len_code);
+        return;
+    }
+    if (!remaining(1 + l)) break;  // not enough for VIF+data
+    uint8_t vif = payload[idx++];
+    const uint8_t *data = payload + idx;
+    idx += l;
+
+    uint64_t raw = 0;
+    bool ok = true;
+    bool is_bcd = (len_code == 0x09 || len_code == 0x0A || len_code == 0x0B || len_code == 0x0C || len_code == 0x0E);
+    if (is_bcd) {
+      ok = to_bcd(data, l, raw);
+    } else {
+      raw = read_le(data, l);
+    }
+    if (!ok) {
+      ESP_LOGW(TAG, "Invalid BCD at vif %02X", vif);
+      continue;
+    }
+
+    switch (vif) {
+      case 0x06: {  // energy Wh -> kWh
+        float energy_kwh = static_cast<float>(raw) * 1.0f;       // raw is kWh
+        publish("energy_kwh", energy_sensor_, energy_kwh);
+        break;
+      }
+      case 0x14: {  // volume m3, BCD with 2 decimals
+        float vol = static_cast<float>(raw) * 0.01f;
+        publish("volume_m3", volume_sensor_, vol);
+        break;
+      }
+      case 0x2D: {  // power, BCD with 2 decimals -> W
+        float power = static_cast<float>(raw) * 100.0f;
+        publish("power_w", power_sensor_, power);
+        break;
+      }
+      case 0x3B: {  // volume flow, BCD with 3 decimals -> m3/h
+        float vf = static_cast<float>(raw) * 0.001f;
+        publish("volume_flow_m3h", volume_flow_sensor_, vf);
+        break;
+      }
+      case 0x5A: {  // flow temp, BCD with 1 decimal
+        float tf = static_cast<float>(raw) * 0.1f;
+        publish("flow_temp_c", flow_temp_sensor_, tf);
+        break;
+      }
+      case 0x5E: {  // return temp, BCD with 1 decimal
+        float tr = static_cast<float>(raw) * 0.1f;
+        publish("return_temp_c", return_temp_sensor_, tr);
+        break;
+      }
+      case 0x61: {  // delta T, BCD with 2 decimals
+        float dt = static_cast<float>(raw) * 0.01f;
+        publish("delta_t_k", delta_t_sensor_, dt);
+        break;
+      }
+      default:
+        break;
+    }
   }
 }
 
@@ -217,6 +300,7 @@ void CFEcho2Reader::dump_config() {
   LOG_SENSOR("  ", "energy", energy_sensor_);
   LOG_SENSOR("  ", "volume", volume_sensor_);
   LOG_SENSOR("  ", "power", power_sensor_);
+  LOG_SENSOR("  ", "volume_flow", volume_flow_sensor_);
   LOG_SENSOR("  ", "flow_temp", flow_temp_sensor_);
   LOG_SENSOR("  ", "return_temp", return_temp_sensor_);
   LOG_SENSOR("  ", "delta_t", delta_t_sensor_);
