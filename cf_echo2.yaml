@@ -1,0 +1,62 @@
+esphome:
+  name: cf-echo2-reader
+  platform: ESP8266
+  board: d1_mini
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Cf-Echo2 Fallback Hotspot"
+    password: !secret fallback_password
+
+captive_portal:
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret hass_api_password
+
+ota:
+  password: !secret ota_password
+
+uart:
+  tx_pin: GPIO1    # D1 Mini TX
+  rx_pin: GPIO3    # D1 Mini RX
+  baud_rate: 2400
+  data_bits: 8
+  parity: EVEN
+  stop_bits: 1
+
+external_components:
+  - source: github://psvanstrom/esphome-cf-echo2@main
+    components: [cf_echo2]
+
+cf_echo2:
+  update_interval: 30s
+
+sensor:
+  - platform: cf_echo2
+    energy:
+      name: "CF Echo Energy"
+      unit_of_measurement: "kWh"
+    volume:
+      name: "CF Echo Volume"
+      unit_of_measurement: "m³"
+    power:
+      name: "CF Echo Power"
+      unit_of_measurement: "W"
+    flow_temp:
+      name: "CF Echo Flow Temp"
+      unit_of_measurement: "°C"
+    return_temp:
+      name: "CF Echo Return Temp"
+      unit_of_measurement: "°C"
+    delta_t:
+      name: "CF Echo Delta T"
+      unit_of_measurement: "K"

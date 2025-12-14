@@ -1,0 +1,45 @@
+#pragma once
+
+#include "esphome/core/component.h"
+#include "esphome/components/sensor/sensor.h"
+#include "esphome/core/hal/platform_timer.h"
+#include "esphome/core/helpers.h"
+
+namespace esphome {
+namespace cf_echo2 {
+
+class CFEcho2Reader : public PollingComponent, public UARTDevice {
+ public:
+  void setup() override;
+  void loop() override;
+  void update() override;
+  void dump_config() override;
+  float get_setup_priority() const override { return esphome::setup_priority::DATA; }
+
+  void set_energy_sensor(sensor::Sensor *energy_sensor) { energy_sensor_ = energy_sensor; }
+  void set_volume_sensor(sensor::Sensor *volume_sensor) { volume_sensor_ = volume_sensor; }
+  void set_power_sensor(sensor::Sensor *power_sensor) { power_sensor_ = power_sensor; }
+  void set_flow_temp_sensor(sensor::Sensor *flow_temp_sensor) { flow_temp_sensor_ = flow_temp_sensor; }
+  void set_return_temp_sensor(sensor::Sensor *return_temp_sensor) { return_temp_sensor_ = return_temp_sensor; }
+  void set_delta_t_sensor(sensor::Sensor *delta_t_sensor) { delta_t_sensor_ = delta_t_sensor; }
+
+ protected:
+  sensor::Sensor *energy_sensor_{nullptr};
+  sensor::Sensor *volume_sensor_{nullptr};
+  sensor::Sensor *power_sensor_{nullptr};
+  sensor::Sensor *flow_temp_sensor_{nullptr};
+  sensor::Sensor *return_temp_sensor_{nullptr};
+  sensor::Sensor *delta_t_sensor_{nullptr};
+
+  void send_wakeup();
+  bool read_frame();
+  void decode_mbus_payload(uint8_t *buf, size_t total);
+
+  const uint8_t WAKEUP_BYTES = 528;
+  const uint32_t WAKEUP_PAUSE_MS = 350;
+  const uint32_t FRAME_TIMEOUT_MS = 3000;
+  const uint8_t REQ_FRAME[] = {0x10, 0x5B, 0xFE, 0x59, 0x16};
+};
+
+}  // namespace cf_echo2
+}  // namespace esphome

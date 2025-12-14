@@ -1,0 +1,28 @@
+# Secrets
+secrets.yaml
+secrets.yml
+*.secret
+
+# ESPHome build artefacts
+.build/
+.cache/
+logs/
+.esphome/
+
+# Arduino/ESP build files
+*.bin
+*.elf
+*.o
+*.a
+pioenvs/
+.pio/
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated
+.DS_Store
+Thumbs.db
