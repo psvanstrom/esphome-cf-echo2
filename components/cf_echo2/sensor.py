@@ -1,6 +1,7 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import sensor, uart
+from esphome import automation
+from esphome.components import button, sensor, uart
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_ENERGY,
@@ -18,12 +19,15 @@ CONF_VOLUME_FLOW = "volume_flow"
 CONF_FLOW_TEMP = "flow_temp"
 CONF_RETURN_TEMP = "return_temp"
 CONF_DELTA_T = "delta_t"
+CONF_READ_BUTTON = "read_button"
 
 DEPENDENCIES = ["uart"]
-AUTO_LOAD = ["sensor"]
+AUTO_LOAD = ["sensor", "button"]
 
 cf_echo2_ns = cg.esphome_ns.namespace("cf_echo2")
 CFEcho2Reader = cf_echo2_ns.class_("CFEcho2Reader", cg.PollingComponent, uart.UARTDevice)
+CFEcho2ReadAction = cf_echo2_ns.class_("CFEcho2ReadAction", automation.Action)
+CFEcho2ReadButton = cf_echo2_ns.class_("CFEcho2ReadButton", button.Button)
 
 SENSOR_SCHEMA = sensor.sensor_schema(
     accuracy_decimals=3,
@@ -59,6 +63,10 @@ CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(CFEcho2Reader),
+            cv.Optional(CONF_READ_BUTTON): button.button_schema(
+                CFEcho2ReadButton,
+                icon="mdi:meter-gas",
+            ),
             cv.Optional(CONF_ENERGY): SENSOR_SCHEMA,
             cv.Optional(CONF_VOLUME): VOLUME_SCHEMA,
             cv.Optional(CONF_POWER): POWER_SCHEMA,
@@ -76,11 +84,32 @@ CONFIG_SCHEMA = (
     .extend(uart.UART_DEVICE_SCHEMA)
 )
 
+CF_ECHO2_READ_ACTION_SCHEMA = cv.Schema(
+    {
+        cv.GenerateID(): cv.use_id(CFEcho2Reader),
+    }
+)
+
+
+@automation.register_action(
+    "cf_echo2.read",
+    CFEcho2ReadAction,
+    CF_ECHO2_READ_ACTION_SCHEMA,
+)
+async def cf_echo2_read_to_code(config, action_id, template_arg, args):
+    var = cg.new_Pvariable(action_id, template_arg)
+    await cg.register_parented(var, config[CONF_ID])
+    return var
+
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     await uart.register_uart_device(var, config)
+
+    if read_button_config := config.get(CONF_READ_BUTTON):
+        btn = await button.new_button(read_button_config)
+        await cg.register_parented(btn, config[CONF_ID])
 
     if CONF_ENERGY in config:
         sens = await sensor.new_sensor(config[CONF_ENERGY])

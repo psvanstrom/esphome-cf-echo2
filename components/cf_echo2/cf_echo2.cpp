@@ -41,6 +41,12 @@ void CFEcho2Reader::update() {
   }
 }
 
+void CFEcho2Reader::trigger_read() {
+  this->update();
+}
+
+void CFEcho2ReadButton::press_action() { this->parent_->trigger_read(); }
+
 void CFEcho2Reader::send_wakeup() {
   ESP_LOGV(TAG, "Wake-up: switching to 8N1");
   this->flush();

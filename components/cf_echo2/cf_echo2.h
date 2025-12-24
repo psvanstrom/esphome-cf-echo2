@@ -2,7 +2,9 @@
 
 #include "esphome/core/component.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/button/button.h"
 #include "esphome/components/uart/uart.h"
+#include "esphome/core/automation.h"
 #include "esphome/core/helpers.h"
 
 namespace esphome {
@@ -15,6 +17,7 @@ class CFEcho2Reader : public PollingComponent, public uart::UARTDevice {
   void update() override;
   void dump_config() override;
   float get_setup_priority() const override { return esphome::setup_priority::DATA; }
+  void trigger_read();
 
   void set_energy_sensor(sensor::Sensor *energy_sensor) { energy_sensor_ = energy_sensor; }
   void set_volume_sensor(sensor::Sensor *volume_sensor) { volume_sensor_ = volume_sensor; }
@@ -42,6 +45,16 @@ class CFEcho2Reader : public PollingComponent, public uart::UARTDevice {
   const uint32_t WAKEUP_PAUSE_MS = 350;   // short pause after wakeup burst
   const uint32_t FRAME_TIMEOUT_MS = 5000; // generous read timeout
   static const uint8_t REQ_FRAME[5];
+};
+
+template<typename... Ts> class CFEcho2ReadAction : public Action<Ts...>, public Parented<CFEcho2Reader> {
+ public:
+  void play(Ts... x) override { this->parent_->trigger_read(); }
+};
+
+class CFEcho2ReadButton : public button::Button, public Parented<CFEcho2Reader> {
+ protected:
+  void press_action() override;
 };
 
 }  // namespace cf_echo2
