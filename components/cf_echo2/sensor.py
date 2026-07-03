@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome import automation
+from esphome import automation, pins
 from esphome.components import button, sensor, uart
 from esphome.const import (
     CONF_ID,
@@ -20,6 +20,7 @@ CONF_FLOW_TEMP = "flow_temp"
 CONF_RETURN_TEMP = "return_temp"
 CONF_DELTA_T = "delta_t"
 CONF_READ_BUTTON = "read_button"
+CONF_ACTIVITY_LED = "activity_led"
 
 DEPENDENCIES = ["uart"]
 AUTO_LOAD = ["sensor", "button"]
@@ -63,6 +64,7 @@ CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(CFEcho2Reader),
+            cv.Optional(CONF_ACTIVITY_LED): pins.gpio_output_pin_schema,
             cv.Optional(CONF_READ_BUTTON): button.button_schema(
                 CFEcho2ReadButton,
                 icon="mdi:meter-gas",
@@ -106,6 +108,10 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     await uart.register_uart_device(var, config)
+
+    if CONF_ACTIVITY_LED in config:
+        led = await cg.gpio_pin_expression(config[CONF_ACTIVITY_LED])
+        cg.add(var.set_activity_led(led))
 
     if read_button_config := config.get(CONF_READ_BUTTON):
         btn = await button.new_button(read_button_config)

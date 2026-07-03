@@ -3,6 +3,10 @@ secrets.yaml
 secrets.yml
 *.secret
 
+# Python bytecode
+__pycache__/
+*.pyc
+
 # ESPHome build artefacts
 .build/
 .cache/
