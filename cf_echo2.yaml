@@ -44,6 +44,11 @@ external_components:
 sensor:
   - platform: cf_echo2
     update_interval: 30min
+    activity_led:
+      number: GPIO2      # D1 Mini onboard LED
+      inverted: true     # onboard LED is active-low
+    read_button:
+      name: "Read Heat Meter"
     energy:
       name: "CF Echo Energy"
       unit_of_measurement: "kWh"
