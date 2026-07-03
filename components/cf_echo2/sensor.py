@@ -1,3 +1,5 @@
+import inspect
+
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import automation, pins
@@ -93,10 +95,20 @@ CF_ECHO2_READ_ACTION_SCHEMA = cv.Schema(
 )
 
 
+# play() only kicks off the async read via the component's loop(); it does not
+# defer play_next_(), so the action itself completes before returning ->
+# synchronous=True. Newer ESPHome versions warn when this is unset; older ones
+# don't accept the argument, so only pass it when supported.
+_READ_ACTION_KWARGS = {}
+if "synchronous" in inspect.signature(automation.register_action).parameters:
+    _READ_ACTION_KWARGS["synchronous"] = True
+
+
 @automation.register_action(
     "cf_echo2.read",
     CFEcho2ReadAction,
     CF_ECHO2_READ_ACTION_SCHEMA,
+    **_READ_ACTION_KWARGS,
 )
 async def cf_echo2_read_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)
